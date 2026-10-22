@@ -15,6 +15,6 @@ public class DemoApplication {
 
     @GetMapping("/")
     public String hello() {
-        return "Bienvenue sur SmartCampus via Jenkins CI/CD !hhhhhhhhhhh";
+        return "Bienvenue sur SmartCampus via Jenkins CI/CD !hhhhhhhhhhhjjjh";
     }
 }
