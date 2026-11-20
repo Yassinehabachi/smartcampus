@@ -1,28 +1,33 @@
 package com.example.demo;
 
 import org.springframework.web.bind.annotation.*;
-import java.util.ArrayList;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/rooms")
 public class RoomController {
 
-    private final List<Room> rooms = new ArrayList<>(List.of(
-        new Room(1L, "Amphi A", 150),
-        new Room(2L, "Salle Informatique B1", 30),
-        new Room(3L, "Labo Réseau C2", 25)
-    ));
+    private final RoomRepository roomRepository;
+
+    public RoomController(RoomRepository roomRepository) {
+        this.roomRepository = roomRepository;
+        // Données d'initialisation si la base est vide
+        if (roomRepository.count() == 0) {
+            roomRepository.save(new Room("Amphi Ibn Battuta", 250));
+            roomRepository.save(new Room("Salle TP DevOps B2", 35));
+            roomRepository.save(new Room("Laboratoire IA & Cloud", 20));
+        }
+    }
 
     @GetMapping
     public List<Room> getAllRooms() {
-        return rooms;
+        return roomRepository.findAll();
     }
 
     @PostMapping
-    public Room addRoom(@RequestBody Room newRoom) {
-        newRoom.setId((long) (rooms.size() + 1));
-        rooms.add(newRoom);
-        return newRoom;
+    public Room createRoom(@RequestBody Room room) {
+        return roomRepository.save(
+            
+        );
     }
 }

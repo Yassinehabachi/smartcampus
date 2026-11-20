@@ -1,14 +1,23 @@
 package com.example.demo;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "rooms")
 public class Room {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String name;
     private int capacity;
 
     public Room() {}
 
-    public Room(Long id, String name, int capacity) {
-        this.id = id;
+    public Room(String name, int capacity) {
         this.name = name;
         this.capacity = capacity;
     }

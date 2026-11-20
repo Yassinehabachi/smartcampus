@@ -1,1 +1,6 @@
-com\example\demo\DemoApplication.class
+com/example/demo/DemoApplication.class
+com/example/demo/RoomController.class
+com/example/demo/RoomRepository.class
+com/example/demo/ReservationController.class
+com/example/demo/Reservation.class
+com/example/demo/Room.class
