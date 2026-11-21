@@ -1,0 +1,9 @@
+apiVersion: v2
+name: smartcampus
+description: Enterprise Helm Chart for SmartCampus API & PostgreSQL
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+maintainers:
+  - name: Yassine Habachi
+    email: devops@smartcampus.local

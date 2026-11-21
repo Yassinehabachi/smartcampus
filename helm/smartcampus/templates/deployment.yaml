@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-api
+  labels:
+    app: {{ .Release.Name }}-api
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-api
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-api
+    spec:
+      containers:
+      - name: api
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.service.port }}
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://{{ .Release.Name }}-postgres:5432/{{ .Values.postgresql.dbName }}"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "{{ .Values.postgresql.user }}"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "{{ .Values.postgresql.password }}"
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-api
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - port: 8080
+    targetPort: {{ .Values.service.port }}
+  selector:
+    app: {{ .Release.Name }}-api
