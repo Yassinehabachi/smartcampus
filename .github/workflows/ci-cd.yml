@@ -1,0 +1,80 @@
+name: SmartCampus CI/CD & DevSecOps Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: 🔨 Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven & Run Unit Tests
+        run: mvn clean package --no-transfer-progress
+
+      - name: Upload Build Artifact (JAR)
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartcampus-app
+          path: target/*.jar
+          retention-days: 5
+
+  docker-and-security:
+    name: 🐳 Docker Build & Trivy Security Scan
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        run: |
+          docker build -t smartcampus-api:${{ github.sha }} .
+
+      - name: Run Trivy Vulnerability Scanner (DevSecOps)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'smartcampus-api:${{ github.sha }}'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Log in to GitHub Container Registry
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag & Push to GHCR
+        if: github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_ID=ghcr.io/${{ github.repository }}/smartcampus-api
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          docker tag smartcampus-api:${{ github.sha }} $IMAGE_ID:latest
+          docker tag smartcampus-api:${{ github.sha }} $IMAGE_ID:${{ github.sha }}
+          docker push $IMAGE_ID:latest
+          docker push $IMAGE_ID:${{ github.sha }}

@@ -1,3 +1,4 @@
+
 apiVersion: v2
 name: smartcampus
 description: Enterprise Helm Chart for SmartCampus API & PostgreSQL
