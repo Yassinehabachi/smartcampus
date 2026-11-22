@@ -3,5 +3,5 @@ job-dsl
 workflow-aggregator
 git
 junit
-timestamps
+timestamper
 pipeline-stage-view
