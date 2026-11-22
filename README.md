@@ -9,7 +9,7 @@
 
 REST API for booking rooms on a university campus. It lists rooms (amphitheatres, labs, classrooms) and stores reservations by room, person, date and time slot. It is also a DevOps showcase: containerised, deployed on Kubernetes, and built through a CI/CD pipeline with a security scan.
 
-**Live demo:** LIVE_URL (free tier, sleeps after 15 minutes idle, so the first request can take about a minute. Demo data is fictional and resets on restart. The demo runs on an in-memory H2 database.)
+**Live demo:** https://smartcampus-4mpm.onrender.com (free tier, sleeps after 15 minutes idle, so the first request can take about a minute. Demo data is fictional and resets on restart. The demo runs on an in-memory H2 database.)
 
 ## Architecture
 
