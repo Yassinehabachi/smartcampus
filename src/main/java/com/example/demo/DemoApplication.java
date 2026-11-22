@@ -15,6 +15,6 @@ public class DemoApplication {
 
     @GetMapping("/")
     public String hello() {
-        return "Bienvenue sur SmartCampus !hhhhhhooohhhpkkkkphhjjjh";
+        return "Bienvenue sur SmartCampus !";
     }
 }

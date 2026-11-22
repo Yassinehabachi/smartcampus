@@ -1,6 +1,8 @@
 package com.example.demo;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 
 @RestController
@@ -11,12 +13,6 @@ public class RoomController {
 
     public RoomController(RoomRepository roomRepository) {
         this.roomRepository = roomRepository;
-        // Données d'initialisation si la base est vide
-        if (roomRepository.count() == 0) {
-            roomRepository.save(new Room("Amphi Ibn Battuta", 250));
-            roomRepository.save(new Room("Salle TP DevOps B2", 35));
-            roomRepository.save(new Room("Laboratoire IA & Cloud", 20));
-        }
     }
 
     @GetMapping
@@ -24,10 +20,16 @@ public class RoomController {
         return roomRepository.findAll();
     }
 
+    @GetMapping("/{id}")
+    public Room getRoom(@PathVariable Long id) {
+        return roomRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found"));
+    }
+
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
     public Room createRoom(@RequestBody Room room) {
-        return roomRepository.save(
-            
-        );
+        room.setId(null);
+        return roomRepository.save(room);
     }
 }

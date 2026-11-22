@@ -4,3 +4,9 @@ target/
 .classpath
 .settings/
 *.log
+.vscode/
+.idea/
+*.iml
+.env
+*.jar
+.DS_Store
