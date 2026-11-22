@@ -2,79 +2,226 @@ name: SmartCampus CI/CD & DevSecOps Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+env:
+  LIVE_URL: https://smartcampus-4mpm.onrender.com
 
 jobs:
   build-and-test:
-    name: 🔨 Build & Test
+    name: Build & Test (Maven, JaCoCo)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: temurin
           cache: maven
-
-      - name: Build with Maven & Run Unit Tests
+      - name: Build and run tests
         run: mvn clean package --no-transfer-progress
-
-      - name: Upload Build Artifact (JAR)
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: smartcampus-app
           path: target/*.jar
           retention-days: 5
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: target/site/jacoco
+          retention-days: 5
+
+  iac-validate:
+    name: IaC & manifests validation (Terraform, Helm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+      - name: Terraform fmt, init, validate
+        working-directory: terraform
+        run: |
+          terraform fmt -check
+          terraform init -backend=false
+          terraform validate
+      - uses: azure/setup-helm@v4
+      - name: Helm lint and template for every environment
+        run: |
+          helm lint helm/smartcampus
+          for env in dev staging prod; do
+            helm template smartcampus helm/smartcampus -f helm/smartcampus/values-$env.yaml > /dev/null
+          done
 
   docker-and-security:
-    name: 🐳 Docker Build & Trivy Security Scan
+    name: Docker build & Trivy scan
     needs: build-and-test
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
       security-events: write
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker Image
-        run: |
-          docker build -t smartcampus-api:${{ github.sha }} .
-
-      - name: Run Trivy Vulnerability Scanner (DevSecOps)
-        uses: aquasecurity/trivy-action@master
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        run: docker build -t smartcampus-api:${{ github.sha }} .
+      - name: Trivy scan (table)
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: 'smartcampus-api:${{ github.sha }}'
-          format: 'table'
-          exit-code: '0'
+          image-ref: smartcampus-api:${{ github.sha }}
+          format: table
+          exit-code: "0"
           ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+      - name: Trivy scan (SARIF for the Security tab)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: smartcampus-api:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: "0"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+      - name: Upload SARIF
+        if: github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+        continue-on-error: true
 
-      - name: Log in to GitHub Container Registry
-        if: github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+  compose-smoke:
+    name: Integration test (compose + Prometheus + Grafana)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the full stack
+        run: |
+          cp .env.example .env
+          docker compose --profile monitoring up -d --build
+      - name: Wait for the API
+        run: |
+          for i in $(seq 1 60); do
+            curl -fs http://localhost:8082/actuator/health/readiness && break
+            sleep 5
+          done
+          curl -fs http://localhost:8082/actuator/health/readiness
+      - name: API checks
+        run: |
+          curl -fs http://localhost:8082/api/rooms | grep -q "Amphi"
+          curl -fs -X POST http://localhost:8082/api/reservations \
+            -H 'Content-Type: application/json' \
+            -d '{"roomId":1,"reservedBy":"CI","date":"2026-12-01","timeSlot":"10:00-12:00"}'
+      - name: Prometheus scrapes the API
+        run: |
+          for i in $(seq 1 24); do
+            curl -fs http://localhost:9090/api/v1/targets | grep -q '"job":"smartcampus".*"health":"up"' && exit 0
+            sleep 5
+          done
+          curl -s http://localhost:9090/api/v1/targets
+          exit 1
+      - name: Grafana is up with the provisioned dashboard
+        run: |
+          for i in $(seq 1 24); do
+            curl -fs http://localhost:3000/api/health && break
+            sleep 5
+          done
+          curl -fs -u admin:change_me "http://localhost:3000/api/search?query=SmartCampus" | grep -q "SmartCampus API Overview"
+      - name: Logs on failure
+        if: failure()
+        run: docker compose --profile monitoring logs --tail=100
+      - name: Tear down
+        if: always()
+        run: docker compose --profile monitoring down -v
+
+  kubernetes-kind:
+    name: Kubernetes test on kind (manifests + Helm)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t smartcampus:1.0 .
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: smartcampus
+      - name: Load image into kind
+        run: kind load docker-image smartcampus:1.0 --name smartcampus
+      - name: Deploy raw manifests
+        run: |
+          kubectl apply -f k8s/
+          kubectl rollout status deployment/postgres --timeout=180s
+          kubectl scale deployment/smartcampus --replicas=1
+          kubectl rollout status deployment/smartcampus --timeout=300s
+      - name: Call the API through the Service
+        run: |
+          kubectl port-forward svc/smartcampus 8081:80 &
+          sleep 5
+          curl -fs http://localhost:8081/api/rooms | grep -q "Amphi"
+          kill %1
+      - name: Remove manifests
+        run: kubectl delete -f k8s/ --wait=true
+      - name: Deploy with Helm (dev values)
+        run: |
+          helm install sc helm/smartcampus -f helm/smartcampus/values-dev.yaml \
+            --set image.repository=smartcampus --set image.tag=1.0
+          kubectl rollout status deployment/sc-postgres --timeout=180s
+          kubectl rollout status deployment/sc-api --timeout=300s
+          kubectl port-forward svc/sc-api 8083:8080 &
+          sleep 5
+          curl -fs http://localhost:8083/actuator/health | grep -q UP
+          kill %1
+      - name: Debug on failure
+        if: failure()
+        run: |
+          kubectl get pods -o wide
+          kubectl describe pods | tail -60
+          kubectl logs -l app=smartcampus --tail=60 || true
+
+  publish:
+    name: Publish image to GHCR
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [docker-and-security, compose-smoke, kubernetes-kind, iac-validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Tag & Push to GHCR
-        if: github.ref == 'refs/heads/main'
+      - name: Build and push
         run: |
-          IMAGE_ID=ghcr.io/${{ github.repository }}/smartcampus-api
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-          docker tag smartcampus-api:${{ github.sha }} $IMAGE_ID:latest
-          docker tag smartcampus-api:${{ github.sha }} $IMAGE_ID:${{ github.sha }}
+          IMAGE_ID=$(echo ghcr.io/${{ github.repository }}/smartcampus-api | tr '[A-Z]' '[a-z]')
+          docker build -t $IMAGE_ID:latest -t $IMAGE_ID:${{ github.sha }} .
           docker push $IMAGE_ID:latest
           docker push $IMAGE_ID:${{ github.sha }}
+
+  deploy-verify:
+    name: CD - verify the Render deployment
+    # Render auto-deploys main once all checks above pass ("After CI checks pass").
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the live service to be healthy
+        run: |
+          sleep 60
+          for i in $(seq 1 40); do
+            if curl -fs --max-time 30 $LIVE_URL/actuator/health | grep -q '"status":"UP"'; then
+              echo "Live service is UP"; exit 0
+            fi
+            sleep 15
+          done
+          echo "Live service did not become healthy"; exit 1
+      - name: Smoke test the live API
+        run: curl -fs --max-time 30 $LIVE_URL/api/rooms | grep -q "Amphi"

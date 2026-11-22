@@ -1,0 +1,7 @@
+# Staging override: docker compose -f compose.yaml -f compose.staging.yaml --profile monitoring up -d
+services:
+  api:
+    image: ghcr.io/yassinehabachi/smartcampus/smartcampus-api:latest
+    environment:
+      SPRING_PROFILES_ACTIVE: staging
+    restart: always

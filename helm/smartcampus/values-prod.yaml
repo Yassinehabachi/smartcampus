@@ -1,0 +1,11 @@
+# Production: three replicas, more resources. Override postgresql.password at install time:
+#   helm install smartcampus helm/smartcampus -f helm/smartcampus/values-prod.yaml --set postgresql.password=...
+replicaCount: 3
+springProfile: prod
+resources:
+  limits:
+    cpu: "1"
+    memory: 768Mi
+  requests:
+    cpu: 500m
+    memory: 512Mi

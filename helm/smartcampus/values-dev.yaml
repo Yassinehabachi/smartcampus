@@ -1,0 +1,10 @@
+# Development: one replica, small resources, verbose logging.
+replicaCount: 1
+springProfile: dev
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi

@@ -1,5 +1,7 @@
 replicaCount: 2
 
+springProfile: default
+
 image:
   repository: smartcampus-api
   tag: latest

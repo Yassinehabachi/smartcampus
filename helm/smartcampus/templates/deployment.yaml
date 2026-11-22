@@ -27,6 +27,20 @@ spec:
           value: "{{ .Values.postgresql.user }}"
         - name: SPRING_DATASOURCE_PASSWORD
           value: "{{ .Values.postgresql.password }}"
+        - name: SPRING_PROFILES_ACTIVE
+          value: "{{ .Values.springProfile }}"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: {{ .Values.service.port }}
+          initialDelaySeconds: 40
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: {{ .Values.service.port }}
+          initialDelaySeconds: 20
+          periodSeconds: 5
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
 ---
