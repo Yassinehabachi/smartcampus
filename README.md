@@ -112,6 +112,14 @@ docker compose --profile monitoring up --build
 
 Prometheus: http://localhost:9090. Grafana: http://localhost:3000 (login from `GRAFANA_USER` and `GRAFANA_PASSWORD` in `.env`, default admin/admin). The dashboard shows request rate, response time, JVM heap, CPU, DB connections and 5xx rate.
 
+### Jenkins
+
+```bash
+docker compose --profile cicd up --build -d
+```
+
+Jenkins runs at http://localhost:8085 (user `admin`, password from `JENKINS_ADMIN_PASSWORD` in `.env`). The image in `jenkins/` is configured as code (`casc.yaml`): admin user and a `smartcampus` pipeline job that reads the `Jenkinsfile` from this repository. Stages: Checkout, Build, Test (JUnit results), Docker build, Trivy scan, Push to the local registry (`localhost:5000`), Deploy (container on port 8090), Smoke test. The `jenkins-e2e` job in GitHub Actions starts this stack, runs the pipeline and requires `SUCCESS`. Jenkins mounts the Docker socket and runs as root, which is fine for a lab and not for production.
+
 ### Pipeline files
 
 - `.github/workflows/ci-cd.yml`: build, test, scans, validation, compose and kind tests, publish, deploy check.
