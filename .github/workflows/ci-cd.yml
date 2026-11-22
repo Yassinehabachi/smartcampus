@@ -49,7 +49,7 @@ jobs:
           terraform fmt -check
           terraform init -backend=false
           terraform validate
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
       - name: Helm lint and template for every environment
         run: |
           helm lint helm/smartcampus
