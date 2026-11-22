@@ -69,24 +69,17 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: Build image
         run: docker build -t smartcampus-api:${{ github.sha }} .
-      - name: Trivy scan (table)
-        uses: aquasecurity/trivy-action@v0.33.1
-        with:
-          image-ref: smartcampus-api:${{ github.sha }}
-          format: table
-          exit-code: "0"
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
+      - name: Trivy scan (table, report only)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.57.1 image \
+            --db-repository public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2 \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 smartcampus-api:${{ github.sha }}
       - name: Trivy scan (SARIF for the Security tab)
-        uses: aquasecurity/trivy-action@v0.33.1
-        with:
-          image-ref: smartcampus-api:${{ github.sha }}
-          format: sarif
-          output: trivy-results.sarif
-          exit-code: "0"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/out" aquasec/trivy:0.57.1 image \
+            --db-repository public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2 \
+            --format sarif --output /out/trivy-results.sarif \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 smartcampus-api:${{ github.sha }}
       - name: Upload SARIF
         if: github.event_name == 'push'
         uses: github/codeql-action/upload-sarif@v3
