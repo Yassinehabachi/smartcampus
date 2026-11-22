@@ -1,0 +1,28 @@
+jenkins:
+  systemMessage: "SmartCampus CI - configured as code (jenkins/casc.yaml)"
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+jobs:
+  - script: >
+      pipelineJob('smartcampus') {
+        description('Build, test, image, scan, push and deploy SmartCampus')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('https://github.com/Yassinehabachi/smartcampus.git') }
+                branch('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }

@@ -139,6 +139,53 @@ jobs:
         if: always()
         run: docker compose --profile monitoring down -v
 
+  jenkins-e2e:
+    name: Jenkins pipeline end-to-end (compose cicd profile)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Jenkins and the local registry
+        run: |
+          cp .env.example .env
+          docker compose --profile cicd up -d --build jenkins registry
+      - name: Wait for Jenkins
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8085/login || true)
+            [ "$code" = "200" ] && break
+            sleep 5
+          done
+          [ "$code" = "200" ]
+      - name: Trigger the smartcampus pipeline and wait for the result
+        run: |
+          AUTH="admin:change_me"
+          CRUMB=$(curl -s -u $AUTH -c jar http://localhost:8085/crumbIssuer/api/json | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['crumbRequestField']+':'+d['crumb'])")
+          curl -s -u $AUTH -b jar -H "$CRUMB" -X POST http://localhost:8085/job/smartcampus/build -o /dev/null -w '%{http_code}\n'
+          for i in $(seq 1 150); do
+            sleep 10
+            R=$(curl -s -u $AUTH http://localhost:8085/job/smartcampus/lastBuild/api/json || true)
+            BUILDING=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin).get('building'))" 2>/dev/null || echo unknown)
+            echo "building=$BUILDING"
+            if [ "$BUILDING" = "False" ]; then
+              RESULT=$(echo "$R" | python3 -c "import sys,json;print(json.load(sys.stdin).get('result'))")
+              echo "result=$RESULT"
+              curl -s -u $AUTH http://localhost:8085/job/smartcampus/lastBuild/consoleText | tail -80
+              [ "$RESULT" = "SUCCESS" ] && exit 0 || exit 1
+            fi
+          done
+          exit 1
+      - name: Jenkins logs on failure
+        if: failure()
+        run: docker compose --profile cicd logs --tail=80 jenkins
+      - name: Tear down
+        if: always()
+        run: |
+          docker rm -f smartcampus-jenkins || true
+          docker compose --profile cicd down -v
+
   kubernetes-kind:
     name: Kubernetes test on kind (manifests + Helm)
     needs: build-and-test

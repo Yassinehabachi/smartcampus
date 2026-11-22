@@ -57,5 +57,28 @@ services:
       - prometheus
     profiles: ["monitoring"]
 
+  registry:
+    image: registry:2
+    container_name: smartcampus-registry
+    ports:
+      - "5000:5000"
+    profiles: ["cicd"]
+
+  jenkins:
+    build: ./jenkins
+    container_name: smartcampus-jenkins-ci
+    user: root
+    environment:
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-admin}
+    ports:
+      - "8085:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - registry
+    profiles: ["cicd"]
+
 volumes:
+  jenkins_home:
   postgres_data:
